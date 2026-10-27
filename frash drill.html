@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flash Drill</title>
+<style>
+:root{
+  --bg:#1f1c1b; --panel:#2a2625; --line:#3b3533; --text:#f2ede8; --muted:#9b938d;
+  --accent:#e8380d; --good:#4caf7a; --bad:#e5484d;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:flex;justify-content:center}
+.wrap{width:100%;max-width:720px;padding:24px 16px 48px}
+.kicker{font:12px var(--mono);letter-spacing:.12em;color:var(--good)}
+h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:36px;margin:6px 0 4px}
+.sub{color:var(--muted);margin:0 0 24px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+.label{font:12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer}
+input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px;flex:none}
+select,input[type=number]{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:15px var(--mono)}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:999px;padding:14px 30px;font:600 16px var(--mono);cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.small{padding:8px 18px;font-size:13px}
+.actions{display:flex;align-items:center;gap:14px;margin:8px 0 20px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:13px;margin:10px 0 0}
+.err{color:var(--bad);font-size:14px;margin:0 0 8px;min-height:1em}
+.center{text-align:center}
+.how summary{cursor:pointer;font:13px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.how p{color:var(--muted);line-height:1.6;font-size:14px;margin:10px 0 0}
+.hud{display:flex;justify-content:space-between;gap:12px;font:14px var(--mono);color:var(--muted);flex-wrap:wrap}
+.hud b{color:var(--text);font-weight:600}
+#problem{font:600 clamp(44px,13vw,92px)/1.15 var(--mono);text-align:center;margin:64px 0 32px;min-height:1.2em;white-space:nowrap}
+#problem.masked{color:var(--line)}
+#problem.bad{color:var(--bad)}
+#answer{display:block;margin:0 auto;width:min(280px,100%);text-align:center;font:600 40px var(--mono);background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:14px;padding:10px;outline:none;transition:border-color .1s}
+#answer:focus{border-color:var(--accent)}
+#answer.flash-good{border-color:var(--good)}
+.big{font:600 56px var(--mono);margin:4px 0}
+.delta{font:14px var(--mono);margin:6px 0 0;color:var(--muted)}
+.delta.up{color:var(--good)} .delta.down{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .v{font:600 24px var(--mono);margin-top:4px}
+.histhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.histhead .label{margin:0}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font:13px var(--mono)}
+th{font-weight:400;color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+th,td{text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
+@media (max-width:560px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .row{grid-template-columns:1fr}
+  #problem{margin-top:40px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">MENTAL MATH</div>
+    <h1>Flash Drill</h1>
+    <p class="sub">The problem appears briefly, then hides. Answer from what you saw. Display time adapts to your level.</p>
+  </header>
+
+  <!-- SETUP -->
+  <section id="setup">
+    <div class="card">
+      <p class="label">Operations</p>
+      <div class="row">
+        <label class="opt">Addition <input type="checkbox" id="opAdd"></label>
+        <label class="opt">Subtraction <input type="checkbox" id="opSub"></label>
+      </div>
+      <div class="row">
+        <div>
+          <p class="label">First number</p>
+          <select id="d1"><option value="1">1 digit</option><option value="2">2 digits</option><option value="3">3 digits</option><option value="4">4 digits</option></select>
+        </div>
+        <div>
+          <p class="label">Second number</p>
+          <select id="d2"><option value="1">1 digit</option><option value="2">2 digits</option><option value="3">3 digits</option><option value="4">4 digits</option></select>
+        </div>
+      </div>
+      <label class="opt" style="margin-bottom:16px">Allow negative answers <input type="checkbox" id="neg"></label>
+      <div class="row">
+        <div>
+          <p class="label">Session length</p>
+          <select id="secs"><option value="30">30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option></select>
+        </div>
+        <div>
+          <p class="label">Starting display (ms)</p>
+          <input type="number" id="startMs" min="60" max="4000" step="50">
+        </div>
+      </div>
+      <label class="opt">Resume from last threshold for this setup <input type="checkbox" id="resume"></label>
+      <p class="hint" id="resumeHint"></p>
+    </div>
+    <p class="err" id="err"></p>
+    <div class="actions">
+      <button class="btn" id="startBtn">Start</button>
+      <span class="hint" style="margin:0">or press Enter</span>
+    </div>
+    <details class="card how">
+      <summary>How it works</summary>
+      <p>Display time shrinks 8% after each correct answer and grows 35% after a miss, so it settles where you're right about 78% of the time. That level is your <b>threshold</b> (median display time over your last 10 problems). Lower is better.</p>
+      <p>Answers submit automatically once you've typed as many characters as the answer has. A miss shows the correct answer for 0.9 s, which counts against the clock.</p>
+      <p>Esc quits without saving. History is stored in this browser only. Use Export CSV to copy it into your spreadsheet.</p>
+    </details>
+  </section>
+
+  <!-- DRILL -->
+  <section id="drill" hidden>
+    <div class="hud">
+      <span>Time <b id="clock">0.0s</b></span>
+      <span>Display <b id="hudMs">0 ms</b></span>
+      <span>✓ <b id="hudC">0</b> &nbsp; ✗ <b id="hudW">0</b></span>
+    </div>
+    <div id="problem"></div>
+    <input id="answer" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Answer">
+    <p class="hint center">Answers submit automatically · Esc to quit (not saved)</p>
+    <div class="center" style="margin-top:12px"><button class="btn ghost small" id="quitBtn">Quit</button></div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="results" hidden>
+    <div class="card center">
+      <p class="label" id="rConfig"></p>
+      <p class="label" style="margin-top:14px">Display threshold</p>
+      <div class="big" id="rThr"></div>
+      <p class="delta" id="rDelta"></p>
+    </div>
+    <div class="stats">
+      <div class="stat"><p class="label">Accuracy</p><div class="v" id="rAcc"></div></div>
+      <div class="stat"><p class="label">Net / min</p><div class="v" id="rNet"></div></div>
+      <div class="stat"><p class="label">Avg response</p><div class="v" id="rRt"></div></div>
+      <div class="stat"><p class="label">Attempted</p><div class="v" id="rN"></div></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="againBtn">Again</button>
+      <button class="btn ghost" id="settingsBtn">Settings</button>
+      <span class="hint" style="margin:0">Enter to go again</span>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="card" id="historyCard">
+    <div class="histhead">
+      <p class="label">History</p>
+      <div style="display:flex;gap:8px">
+        <button class="btn ghost small" id="exportBtn">Export CSV</button>
+        <button class="btn ghost small" id="clearBtn">Clear</button>
+      </div>
+    </div>
+    <p class="hint" id="histEmpty" style="margin:0">No sessions yet.</p>
+    <div class="tablewrap">
+      <table id="histTable" hidden>
+        <thead><tr><th>When</th><th>Setup</th><th>Thresh (ms)</th><th>Acc</th><th>Net/min</th><th>Avg RT</th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const LS_S = 'flashdrill.settings.v1', LS_H = 'flashdrill.history.v1';
+  const DEFAULTS = { add: true, sub: true, d1: 2, d2: 2, neg: false, secs: 60, startMs: 800, resume: true };
+  const MIN_MS = 60, MAX_MS = 4000, DOWN = 0.92, UP = 1.35, MISS_PAUSE = 900;
+
+  function load(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } }
+  function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  let settings = Object.assign({}, DEFAULTS, load(LS_S, {}));
+  let st = null;
+
+  function showScreen(name) {
+    ['setup', 'drill', 'results'].forEach(s => { $(s).hidden = (s !== name); });
+    $('historyCard').hidden = (name === 'drill');
+  }
+
+  function fillForm() {
+    $('opAdd').checked = settings.add; $('opSub').checked = settings.sub;
+    $('d1').value = settings.d1; $('d2').value = settings.d2;
+    $('neg').checked = settings.neg; $('secs').value = settings.secs;
+    $('startMs').value = settings.startMs; $('resume').checked = settings.resume;
+  }
+  function formSettings() {
+    return {
+      add: $('opAdd').checked, sub: $('opSub').checked,
+      d1: +$('d1').value, d2: +$('d2').value, neg: $('neg').checked,
+      secs: +$('secs').value,
+      startMs: Math.min(MAX_MS, Math.max(MIN_MS, +$('startMs').value || 800)),
+      resume: $('resume').checked
+    };
+  }
+  function label(s) {
+    const op = s.add && s.sub ? '±' : (s.add ? '+' : '−');
+    return s.d1 + 'd ' + op + ' ' + s.d2 + 'd' + (s.neg && s.sub ? ' neg' : '');
+  }
+  function history() { return load(LS_H, []); }
+  function lastFor(lbl) {
+    const h = history();
+    for (let i = h.length - 1; i >= 0; i--) if (h[i].config === lbl) return h[i];
+    return null;
+  }
+  function updateResumeHint() {
+    const s = formSettings();
+    const prev = lastFor(label(s));
+    $('resumeHint').textContent = prev
+      ? 'Last threshold for ' + label(s) + ': ' + prev.threshold + ' ms'
+      : 'No previous session for ' + label(s) + ' yet. Starting display time will be used.';
+  }
+
+  function rnd(d) {
+    const lo = d === 1 ? 2 : Math.pow(10, d - 1), hi = Math.pow(10, d) - 1;
+    return lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
+  function makeProblem() {
+    const ops = [];
+    if (settings.add) ops.push('+');
+    if (settings.sub) ops.push('−');
+    const op = ops[Math.floor(Math.random() * ops.length)];
+    let a = rnd(settings.d1), b = rnd(settings.d2);
+    if (op === '−' && !settings.neg && b > a) { const t = a; a = b; b = t; }
+    const ans = op === '+' ? a + b : a - b;
+    return { text: a + ' ' + op + ' ' + b, ans: String(ans) };
+  }
+  function mask(t) { return t.replace(/\d/g, '•'); }
+  function median(arr) {
+    if (!arr.length) return null;
+    const s = arr.slice().sort((x, y) => x - y), m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  function start() {
+    settings = formSettings();
+    if (!settings.add && !settings.sub) { $('err').textContent = 'Pick at least one operation.'; showScreen('setup'); return; }
+    $('err').textContent = '';
+    store(LS_S, settings);
+    const lbl = label(settings), prev = lastFor(lbl);
+    const ms = (settings.resume && prev) ? prev.threshold : settings.startMs;
+    st = { lbl, ms, prev, correct: 0, wrong: 0, msLog: [], rt: [],
+           endAt: performance.now() + settings.secs * 1000,
+           cur: null, hideT: null, missT: null, tick: null, locked: false, done: false };
+    showScreen('drill');
+    const inp = $('answer'); inp.value = ''; inp.focus();
+    st.tick = setInterval(tick, 100);
+    tick();
+    next();
+  }
+
+  function tick() {
+    if (!st || st.done) return;
+    const left = Math.max(0, st.endAt - performance.now());
+    $('clock').textContent = (left / 1000).toFixed(1) + 's';
+    if (left <= 0) finish(true);
+  }
+  function hud() {
+    $('hudMs').textContent = Math.round(st.ms) + ' ms';
+    $('hudC').textContent = st.correct;
+    $('hudW').textContent = st.wrong;
+  }
+
+  function next() {
+    if (!st || st.done) return;
+    if (performance.now() >= st.endAt) { finish(true); return; }
+    const p = makeProblem();
+    p.ms = st.ms;
+    st.cur = p; st.locked = false;
+    const el = $('problem');
+    el.className = ''; el.textContent = p.text;
+    $('answer').value = '';
+    p.shownAt = performance.now();
+    clearTimeout(st.hideT);
+    st.hideT = setTimeout(() => {
+      if (st && st.cur === p && !st.locked) { el.textContent = mask(p.text); el.className = 'masked'; }
+    }, p.ms);
+    hud();
+  }
+
+  function grade(ok) {
+    st.locked = true;
+    clearTimeout(st.hideT);
+    const p = st.cur;
+    st.msLog.push(p.ms);
+    if (ok) {
+      st.correct++;
+      st.rt.push(performance.now() - p.shownAt);
+      st.ms = Math.max(MIN_MS, st.ms * DOWN);
+      const inp = $('answer');
+      inp.classList.add('flash-good');
+      setTimeout(() => inp.classList.remove('flash-good'), 120);
+      next();
+    } else {
+      st.wrong++;
+      st.ms = Math.min(MAX_MS, st.ms * UP);
+      const el = $('problem');
+      el.className = 'bad';
+      el.textContent = p.text + ' = ' + p.ans;
+      hud();
+      st.missT = setTimeout(() => { if (st && !st.done) next(); }, MISS_PAUSE);
+    }
+  }
+
+  $('answer').addEventListener('input', () => {
+    const inp = $('answer');
+    if (!st || st.done) return;
+    if (st.locked) { inp.value = ''; return; }
+    const v = inp.value.replace(/[^0-9-]/g, '');
+    if (v !== inp.value) inp.value = v;
+    if (v.length >= st.cur.ans.length) grade(v === st.cur.ans);
+  });
+
+  function finish(save) {
+    if (!st || st.done) return;
+    st.done = true;
+    clearInterval(st.tick); clearTimeout(st.hideT); clearTimeout(st.missT);
+    if (!save) { st = null; showScreen('setup'); updateResumeHint(); renderHistory(); return; }
+    const n = st.correct + st.wrong, mins = settings.secs / 60;
+    const med = median(st.msLog.slice(-10));
+    const rec = {
+      date: new Date().toISOString(),
+      config: st.lbl,
+      secs: settings.secs,
+      attempted: n,
+      correct: st.correct,
+      wrong: st.wrong,
+      accuracy: n ? Math.round(st.correct / n * 1000) / 10 : 0,
+      netPerMin: Math.round((st.correct - st.wrong) / mins * 10) / 10,
+      avgRt: st.rt.length ? Math.round(st.rt.reduce((a, b) => a + b, 0) / st.rt.length) / 1000 : null,
+      threshold: Math.round(med == null ? st.ms : med)
+    };
+    if (n > 0) {
+      const h = history(); h.push(rec);
+      if (h.length > 2000) h.splice(0, h.length - 2000);
+      store(LS_H, h);
+    }
+    renderResults(rec, n > 0 ? st.prev : null);
+    st = null;
+    showScreen('results');
+    renderHistory();
+  }
+
+  function renderResults(r, prev) {
+    $('rConfig').textContent = r.config + ' · ' + (r.secs >= 60 ? (r.secs / 60) + ' min' : r.secs + ' s');
+    $('rThr').textContent = r.threshold + ' ms';
+    const d = $('rDelta');
+    d.className = 'delta';
+    if (prev) {
+      const diff = r.threshold - prev.threshold;
+      if (diff < 0) { d.textContent = '▼ ' + (-diff) + ' ms faster than last session'; d.classList.add('up'); }
+      else if (diff > 0) { d.textContent = '▲ ' + diff + ' ms slower than last session'; d.classList.add('down'); }
+      else d.textContent = 'Same as last session';
+    } else d.textContent = 'First session with this setup';
+    $('rAcc').textContent = r.accuracy + '%';
+    $('rNet').textContent = r.netPerMin;
+    $('rRt').textContent = r.avgRt == null ? '—' : r.avgRt.toFixed(2) + 's';
+    $('rN').textContent = r.attempted;
+  }
+
+  function renderHistory() {
+    const h = history(), body = $('histBody');
+    body.innerHTML = '';
+    if (!h.length) { $('histEmpty').hidden = false; $('histTable').hidden = true; return; }
+    $('histEmpty').hidden = true; $('histTable').hidden = false;
+    h.slice(-25).reverse().forEach(r => {
+      const tr = document.createElement('tr'), dt = new Date(r.date);
+      const cells = [
+        dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+          dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+        r.config, r.threshold, r.accuracy + '%', r.netPerMin,
+        r.avgRt == null ? '—' : r.avgRt.toFixed(2) + 's'
+      ];
+      cells.forEach(c => { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+  }
+
+  function exportCsv() {
+    const h = history();
+    if (!h.length) return;
+    const cols = ['date', 'config', 'secs', 'attempted', 'correct', 'wrong', 'accuracy', 'netPerMin', 'avgRt', 'threshold'];
+    const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const csv = [cols.join(',')].concat(h.map(r => cols.map(c => esc(r[c])).join(','))).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'flash-drill-history.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Wiring
+  $('startBtn').addEventListener('click', start);
+  $('againBtn').addEventListener('click', start);
+  $('settingsBtn').addEventListener('click', () => { fillForm(); updateResumeHint(); showScreen('setup'); });
+  $('quitBtn').addEventListener('click', () => finish(false));
+  $('exportBtn').addEventListener('click', exportCsv);
+  $('clearBtn').addEventListener('click', () => {
+    if (confirm('Delete all saved sessions on this device?')) { store(LS_H, []); renderHistory(); updateResumeHint(); }
+  });
+  ['opAdd', 'opSub', 'd1', 'd2', 'neg', 'secs', 'startMs', 'resume'].forEach(id => $(id).addEventListener('change', updateResumeHint));
+
+  $('drill').addEventListener('pointerdown', e => {
+    if (e.target.id !== 'answer' && e.target.id !== 'quitBtn') { e.preventDefault(); $('answer').focus(); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (st && !st.done) {
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      return;
+    }
+    if (e.key === 'Enter' && $('drill').hidden) {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === 'BUTTON' || tag === 'SUMMARY') return;
+      e.preventDefault();
+      start();
+    }
+  });
+
+  fillForm();
+  updateResumeHint();
+  renderHistory();
+  showScreen('setup');
+})();
+</script>
+</body>
+</html>
