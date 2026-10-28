@@ -80,7 +80,14 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
         <label class="opt">Addition <input type="checkbox" id="opAdd"></label>
         <label class="opt">Subtraction <input type="checkbox" id="opSub"></label>
       </div>
-      <div class="row">
+      <p class="label">Problem type</p>
+      <select id="mode" style="margin-bottom:6px">
+        <option value="mixed">Mixed: any problem</option>
+        <option value="regroup">Regroup only: every + carries, every − borrows</option>
+        <option value="facts">Regroup facts: the 45 core facts (e.g. 14 − 8, 6 + 7)</option>
+      </select>
+      <p class="hint" id="modeHint" style="margin:0 0 16px"></p>
+      <div class="row" id="digitsRow">
         <div>
           <p class="label">First number</p>
           <select id="d1"><option value="1">1 digit</option><option value="2">2 digits</option><option value="3">3 digits</option><option value="4">4 digits</option></select>
@@ -104,7 +111,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <div class="row">
         <div>
           <p class="label">Answer deadline</p>
-          <select id="deadline"><option value="0">Off</option><option value="2">2.0 s</option><option value="2.5">2.5 s</option><option value="3">3.0 s</option><option value="3.5">3.5 s</option><option value="4">4.0 s</option><option value="5">5.0 s</option><option value="6">6.0 s</option></select>
+          <select id="deadline"><option value="0">Off</option><option value="1">1.0 s</option><option value="1.5">1.5 s</option><option value="2">2.0 s</option><option value="2.5">2.5 s</option><option value="3">3.0 s</option><option value="3.5">3.5 s</option><option value="4">4.0 s</option><option value="5">5.0 s</option><option value="6">6.0 s</option></select>
         </div>
         <div>
           <p class="label">Deadline rule</p>
@@ -124,6 +131,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <p>Display time shrinks 8% after each correct answer and grows 35% after a miss, so it settles where you're right about 78% of the time. That level is your <b>threshold</b> (median display time over your last 10 problems). Lower is better.</p>
       <p>Answers submit automatically once you've typed as many characters as the answer has. A miss shows the correct answer for 0.9 s, which counts against the clock.</p>
       <p><b>Answer deadline:</b> the bar under the answer box drains from the moment the problem appears. If you haven't finished typing when it empties, the problem counts as a miss ("too slow") and display time grows. This stops you from holding the image and reading it back slowly. Each deadline keeps its own history and threshold. Lower the deadline by 0.5 s once your average response is under about 70% of it for 3 sessions in a row.</p>
+      <p><b>Regroup facts:</b> only the 45 subtraction facts that need a borrow (10 − 1 … 18 − 9) and/or the 45 addition facts that carry (1 + 9 … 9 + 9). The drill remembers how fast you answer each one and shows your slowest ones more often until they're as fast as the rest. The results screen lists your slowest facts.</p>
       <p>Esc quits without saving. History is stored in this browser only. Use Export CSV to copy it into your spreadsheet.</p>
     </details>
   </section>
@@ -158,6 +166,10 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <div class="stat"><p class="label">Attempted</p><div class="v" id="rN"></div></div>
       <div class="stat"><p class="label">Too slow</p><div class="v" id="rTo"></div></div>
     </div>
+    <div class="card" id="factsCard" hidden>
+      <div class="histhead"><p class="label">Slowest facts (all sessions)</p><span class="hint" style="margin:0" id="factsCov"></span></div>
+      <div id="factsList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
     <div class="actions">
       <button class="btn" id="againBtn">Again</button>
       <button class="btn ghost" id="settingsBtn">Settings</button>
@@ -187,8 +199,8 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const LS_S = 'flashdrill.settings.v1', LS_H = 'flashdrill.history.v1';
-  const DEFAULTS = { add: true, sub: true, d1: 2, d2: 2, neg: false, secs: 120, startMs: 800, resume: true, deadline: 4 };
+  const LS_S = 'flashdrill.settings.v1', LS_H = 'flashdrill.history.v1', LS_F = 'flashdrill.facts.v1';
+  const DEFAULTS = { add: true, sub: true, d1: 2, d2: 2, neg: false, secs: 120, startMs: 800, resume: true, deadline: 4, mode: 'mixed' };
   const MIN_MS = 60, MAX_MS = 4000, DOWN = 0.92, UP = 1.35, MISS_PAUSE = 900;
 
   function load(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } }
@@ -208,6 +220,19 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     $('neg').checked = settings.neg; $('secs').value = settings.secs;
     $('startMs').value = settings.startMs; $('resume').checked = settings.resume;
     $('deadline').value = String(settings.deadline);
+    $('mode').value = settings.mode;
+    syncMode();
+  }
+  function syncMode() {
+    const m = $('mode').value, facts = m === 'facts';
+    ['d1', 'd2', 'neg'].forEach(id => { $(id).disabled = facts; });
+    $('digitsRow').style.opacity = facts ? .4 : 1;
+    $('neg').closest('label').style.opacity = facts ? .4 : 1;
+    $('modeHint').textContent = facts
+      ? 'Digit settings are ignored. Suggested: 2 min, 1.5 s deadline. Slow facts come up more often.'
+      : m === 'regroup'
+        ? 'Every problem needs a carry (+) or a borrow (−) in the units place. Suggested: subtraction only, 2d − 1d, 2.5 s deadline.'
+        : '';
   }
   function formSettings() {
     return {
@@ -216,13 +241,16 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       secs: +$('secs').value,
       startMs: Math.min(MAX_MS, Math.max(MIN_MS, +$('startMs').value || 800)),
       resume: $('resume').checked,
-      deadline: +$('deadline').value || 0
+      deadline: +$('deadline').value || 0,
+      mode: $('mode').value
     };
   }
   function label(s) {
     const op = s.add && s.sub ? '±' : (s.add ? '+' : '−');
+    const dl = s.deadline ? ' ≤' + s.deadline + 's' : '';
+    if (s.mode === 'facts') return 'facts ' + op + dl;
     return s.d1 + 'd ' + op + ' ' + s.d2 + 'd' + (s.neg && s.sub ? ' neg' : '') +
-      (s.deadline ? ' ≤' + s.deadline + 's' : '');
+      (s.mode === 'regroup' ? ' rg' : '') + dl;
   }
   function history() { return load(LS_H, []); }
   function lastFor(lbl) {
@@ -242,13 +270,48 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     const lo = d === 1 ? 2 : Math.pow(10, d - 1), hi = Math.pow(10, d) - 1;
     return lo + Math.floor(Math.random() * (hi - lo + 1));
   }
+  function regroups(op, a, b) {
+    if (op === '+') return (a % 10) + (b % 10) >= 10;
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi % 10) < (lo % 10);
+  }
+  function allFacts(s) {
+    const out = [];
+    if (s.add) for (let a = 1; a <= 9; a++) for (let b = 10 - a; b <= 9; b++)
+      out.push({ key: a + '+' + b, text: a + ' + ' + b, ans: String(a + b) });
+    if (s.sub) for (let u = 0; u <= 8; u++) for (let b = u + 1; b <= 9; b++)
+      out.push({ key: (10 + u) + '-' + b, text: (10 + u) + ' − ' + b, ans: String(10 + u - b) });
+    return out;
+  }
+  function pickFact() {
+    const stats = load(LS_F, {}), lastKey = st && st.cur ? st.cur.key : null;
+    const pool = allFacts(settings).filter(f => f.key !== lastKey);
+    if (Math.random() < 0.3) return Object.assign({}, pool[Math.floor(Math.random() * pool.length)]);
+    const w =pool.map(f => { const x = stats[f.key] ? stats[f.key].ema : 2500; return x * x; });
+    let r = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return Object.assign({}, pool[i]); }
+    return Object.assign({}, pool[pool.length - 1]);
+  }
+  function recordFact(p, ok) {
+    if (!p.key) return;
+    const stats = load(LS_F, {});
+    const rt = ok ? performance.now() - p.shownAt : (st.dlMs || 3000) * 1.5;
+    const s = stats[p.key];
+    stats[p.key] = s ? { n: s.n + 1, ema: Math.round(0.7 * s.ema + 0.3 * rt) } : { n: 1, ema: Math.round(rt) };
+    store(LS_F, stats);
+  }
   function makeProblem() {
+    if (settings.mode === 'facts') return pickFact();
     const ops = [];
     if (settings.add) ops.push('+');
     if (settings.sub) ops.push('−');
-    const op = ops[Math.floor(Math.random() * ops.length)];
-    let a = rnd(settings.d1), b = rnd(settings.d2);
-    if (op === '−' && !settings.neg && b > a) { const t = a; a = b; b = t; }
+    let op, a, b;
+    for (let tries = 0; tries < 300; tries++) {
+      op = ops[Math.floor(Math.random() * ops.length)];
+      a = rnd(settings.d1); b = rnd(settings.d2);
+      if (op === '−' && !settings.neg && b > a) { const t = a; a = b; b = t; }
+      if (settings.mode !== 'regroup' || regroups(op, a, b)) break;
+    }
     const ans = op === '+' ? a + b : a - b;
     return { text: a + ' ' + op + ' ' + b, ans: String(ans) };
   }
@@ -330,6 +393,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     bar.style.width = getComputedStyle(bar).width;
     const p = st.cur;
     st.msLog.push(p.ms);
+    if (settings.mode === 'facts') recordFact(p, ok);
     if (ok) {
       st.correct++;
       st.rt.push(performance.now() - p.shownAt);
@@ -407,6 +471,23 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     $('rRt').textContent = r.avgRt == null ? '—' : r.avgRt.toFixed(2) + 's';
     $('rN').textContent = r.attempted;
     $('rTo').textContent = r.deadline ? r.timeouts : '—';
+    renderSlowFacts();
+  }
+  function renderSlowFacts() {
+    const card = $('factsCard');
+    card.hidden = settings.mode !== 'facts';
+    if (card.hidden) return;
+    const stats = load(LS_F, {}), facts = allFacts(settings);
+    const seen = facts.filter(f => stats[f.key]);
+    $('factsCov').textContent = 'seen ' + seen.length + ' / ' + facts.length;
+    const list = $('factsList'); list.innerHTML = '';
+    seen.sort((x, y) => stats[y.key].ema - stats[x.key].ema).slice(0, 10).forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = 'stat';
+      chip.style.cssText = 'padding:8px 12px;font:600 14px var(--mono)';
+      chip.textContent = f.text + ' = ' + f.ans + '  ·  ' + (stats[f.key].ema / 1000).toFixed(2) + 's';
+      list.appendChild(chip);
+    });
   }
 
   function renderHistory() {
@@ -449,7 +530,8 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
   $('clearBtn').addEventListener('click', () => {
     if (confirm('Delete all saved sessions on this device?')) { store(LS_H, []); renderHistory(); updateResumeHint(); }
   });
-  ['opAdd', 'opSub', 'd1', 'd2', 'neg', 'secs', 'startMs', 'resume', 'deadline'].forEach(id => $(id).addEventListener('change', updateResumeHint));
+  ['opAdd', 'opSub', 'd1', 'd2', 'neg', 'secs', 'startMs', 'resume', 'deadline', 'mode'].forEach(id => $(id).addEventListener('change', updateResumeHint));
+  $('mode').addEventListener('change', syncMode);
 
   $('drill').addEventListener('pointerdown', e => {
     if (e.target.id !== 'answer' && e.target.id !== 'quitBtn') { e.preventDefault(); $('answer').focus(); }
