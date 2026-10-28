@@ -38,13 +38,16 @@ select,input[type=number]{width:100%;background:var(--bg);color:var(--text);bord
 #problem{font:600 clamp(44px,13vw,92px)/1.15 var(--mono);text-align:center;margin:64px 0 32px;min-height:1.2em;white-space:nowrap}
 #problem.masked{color:var(--line)}
 #problem.bad{color:var(--bad)}
+#slow{font:600 13px var(--mono);letter-spacing:.1em;text-align:center;color:var(--bad);min-height:1.2em;margin:-20px 0 8px}
+.dl{width:min(280px,100%);height:4px;margin:12px auto 0;background:var(--line);border-radius:2px;overflow:hidden}
+.dl i{display:block;height:100%;width:100%;background:var(--accent)}
 #answer{display:block;margin:0 auto;width:min(280px,100%);text-align:center;font:600 40px var(--mono);background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:14px;padding:10px;outline:none;transition:border-color .1s}
 #answer:focus{border-color:var(--accent)}
 #answer.flash-good{border-color:var(--good)}
 .big{font:600 56px var(--mono);margin:4px 0}
 .delta{font:14px var(--mono);margin:6px 0 0;color:var(--muted)}
 .delta.up{color:var(--good)} .delta.down{color:var(--bad)}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
 .stat .v{font:600 24px var(--mono);margin-top:4px}
 .histhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
@@ -98,6 +101,16 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
           <input type="number" id="startMs" min="60" max="4000" step="50">
         </div>
       </div>
+      <div class="row">
+        <div>
+          <p class="label">Answer deadline</p>
+          <select id="deadline"><option value="0">Off</option><option value="2">2.0 s</option><option value="2.5">2.5 s</option><option value="3">3.0 s</option><option value="3.5">3.5 s</option><option value="4">4.0 s</option><option value="5">5.0 s</option><option value="6">6.0 s</option></select>
+        </div>
+        <div>
+          <p class="label">Deadline rule</p>
+          <p class="hint" style="margin:0;line-height:1.5">Counted from when the problem appears. Not done in time = miss.</p>
+        </div>
+      </div>
       <label class="opt">Resume from last threshold for this setup <input type="checkbox" id="resume"></label>
       <p class="hint" id="resumeHint"></p>
     </div>
@@ -110,6 +123,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <summary>How it works</summary>
       <p>Display time shrinks 8% after each correct answer and grows 35% after a miss, so it settles where you're right about 78% of the time. That level is your <b>threshold</b> (median display time over your last 10 problems). Lower is better.</p>
       <p>Answers submit automatically once you've typed as many characters as the answer has. A miss shows the correct answer for 0.9 s, which counts against the clock.</p>
+      <p><b>Answer deadline:</b> the bar under the answer box drains from the moment the problem appears. If you haven't finished typing when it empties, the problem counts as a miss ("too slow") and display time grows. This stops you from holding the image and reading it back slowly. Each deadline keeps its own history and threshold. Lower the deadline by 0.5 s once your average response is under about 70% of it for 3 sessions in a row.</p>
       <p>Esc quits without saving. History is stored in this browser only. Use Export CSV to copy it into your spreadsheet.</p>
     </details>
   </section>
@@ -122,7 +136,9 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <span>✓ <b id="hudC">0</b> &nbsp; ✗ <b id="hudW">0</b></span>
     </div>
     <div id="problem"></div>
+    <div id="slow"></div>
     <input id="answer" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Answer">
+    <div class="dl" id="dlWrap"><i id="dlBar"></i></div>
     <p class="hint center">Answers submit automatically · Esc to quit (not saved)</p>
     <div class="center" style="margin-top:12px"><button class="btn ghost small" id="quitBtn">Quit</button></div>
   </section>
@@ -140,6 +156,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <div class="stat"><p class="label">Net / min</p><div class="v" id="rNet"></div></div>
       <div class="stat"><p class="label">Avg response</p><div class="v" id="rRt"></div></div>
       <div class="stat"><p class="label">Attempted</p><div class="v" id="rN"></div></div>
+      <div class="stat"><p class="label">Too slow</p><div class="v" id="rTo"></div></div>
     </div>
     <div class="actions">
       <button class="btn" id="againBtn">Again</button>
@@ -171,7 +188,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
 (function () {
   const $ = id => document.getElementById(id);
   const LS_S = 'flashdrill.settings.v1', LS_H = 'flashdrill.history.v1';
-  const DEFAULTS = { add: true, sub: true, d1: 2, d2: 2, neg: false, secs: 60, startMs: 800, resume: true };
+  const DEFAULTS = { add: true, sub: true, d1: 2, d2: 2, neg: false, secs: 120, startMs: 800, resume: true, deadline: 4 };
   const MIN_MS = 60, MAX_MS = 4000, DOWN = 0.92, UP = 1.35, MISS_PAUSE = 900;
 
   function load(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } }
@@ -190,6 +207,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     $('d1').value = settings.d1; $('d2').value = settings.d2;
     $('neg').checked = settings.neg; $('secs').value = settings.secs;
     $('startMs').value = settings.startMs; $('resume').checked = settings.resume;
+    $('deadline').value = String(settings.deadline);
   }
   function formSettings() {
     return {
@@ -197,12 +215,14 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       d1: +$('d1').value, d2: +$('d2').value, neg: $('neg').checked,
       secs: +$('secs').value,
       startMs: Math.min(MAX_MS, Math.max(MIN_MS, +$('startMs').value || 800)),
-      resume: $('resume').checked
+      resume: $('resume').checked,
+      deadline: +$('deadline').value || 0
     };
   }
   function label(s) {
     const op = s.add && s.sub ? '±' : (s.add ? '+' : '−');
-    return s.d1 + 'd ' + op + ' ' + s.d2 + 'd' + (s.neg && s.sub ? ' neg' : '');
+    return s.d1 + 'd ' + op + ' ' + s.d2 + 'd' + (s.neg && s.sub ? ' neg' : '') +
+      (s.deadline ? ' ≤' + s.deadline + 's' : '');
   }
   function history() { return load(LS_H, []); }
   function lastFor(lbl) {
@@ -246,9 +266,12 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     store(LS_S, settings);
     const lbl = label(settings), prev = lastFor(lbl);
     const ms = (settings.resume && prev) ? prev.threshold : settings.startMs;
-    st = { lbl, ms, prev, correct: 0, wrong: 0, msLog: [], rt: [],
+    const dlMs = settings.deadline * 1000;
+    st = { lbl, ms: dlMs ? Math.min(ms, dlMs) : ms, prev, dlMs, correct: 0, wrong: 0, timeouts: 0, msLog: [], rt: [],
            endAt: performance.now() + settings.secs * 1000,
-           cur: null, hideT: null, missT: null, tick: null, locked: false, done: false };
+           cur: null, hideT: null, missT: null, dlT: null, tick: null, locked: false, done: false };
+    $('dlWrap').style.visibility = dlMs ? 'visible' : 'hidden';
+    $('slow').textContent = '';
     showScreen('drill');
     const inp = $('answer'); inp.value = ''; inp.focus();
     st.tick = setInterval(tick, 100);
@@ -276,18 +299,35 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     st.cur = p; st.locked = false;
     const el = $('problem');
     el.className = ''; el.textContent = p.text;
+    $('slow').textContent = '';
     $('answer').value = '';
     p.shownAt = performance.now();
     clearTimeout(st.hideT);
     st.hideT = setTimeout(() => {
       if (st && st.cur === p && !st.locked) { el.textContent = mask(p.text); el.className = 'masked'; }
     }, p.ms);
+    clearTimeout(st.dlT);
+    if (st.dlMs) {
+      const bar = $('dlBar');
+      bar.style.transition = 'none';
+      bar.style.width = '100%';
+      void bar.offsetWidth;
+      bar.style.transition = 'width ' + st.dlMs + 'ms linear';
+      bar.style.width = '0%';
+      st.dlT = setTimeout(() => {
+        if (st && !st.done && st.cur === p && !st.locked) grade(false, true);
+      }, st.dlMs);
+    }
     hud();
   }
 
-  function grade(ok) {
+  function grade(ok, timedOut) {
     st.locked = true;
     clearTimeout(st.hideT);
+    clearTimeout(st.dlT);
+    const bar = $('dlBar');
+    bar.style.transition = 'none';
+    bar.style.width = getComputedStyle(bar).width;
     const p = st.cur;
     st.msLog.push(p.ms);
     if (ok) {
@@ -300,7 +340,8 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       next();
     } else {
       st.wrong++;
-      st.ms = Math.min(MAX_MS, st.ms * UP);
+      if (timedOut) { st.timeouts++; $('slow').textContent = 'TOO SLOW'; $('answer').value = ''; }
+      st.ms = Math.min(MAX_MS, st.dlMs || MAX_MS, st.ms * UP);
       const el = $('problem');
       el.className = 'bad';
       el.textContent = p.text + ' = ' + p.ans;
@@ -321,7 +362,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
   function finish(save) {
     if (!st || st.done) return;
     st.done = true;
-    clearInterval(st.tick); clearTimeout(st.hideT); clearTimeout(st.missT);
+    clearInterval(st.tick); clearTimeout(st.hideT); clearTimeout(st.missT); clearTimeout(st.dlT);
     if (!save) { st = null; showScreen('setup'); updateResumeHint(); renderHistory(); return; }
     const n = st.correct + st.wrong, mins = settings.secs / 60;
     const med = median(st.msLog.slice(-10));
@@ -332,6 +373,8 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       attempted: n,
       correct: st.correct,
       wrong: st.wrong,
+      timeouts: st.timeouts,
+      deadline: settings.deadline || '',
       accuracy: n ? Math.round(st.correct / n * 1000) / 10 : 0,
       netPerMin: Math.round((st.correct - st.wrong) / mins * 10) / 10,
       avgRt: st.rt.length ? Math.round(st.rt.reduce((a, b) => a + b, 0) / st.rt.length) / 1000 : null,
@@ -363,6 +406,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     $('rNet').textContent = r.netPerMin;
     $('rRt').textContent = r.avgRt == null ? '—' : r.avgRt.toFixed(2) + 's';
     $('rN').textContent = r.attempted;
+    $('rTo').textContent = r.deadline ? r.timeouts : '—';
   }
 
   function renderHistory() {
@@ -386,7 +430,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
   function exportCsv() {
     const h = history();
     if (!h.length) return;
-    const cols = ['date', 'config', 'secs', 'attempted', 'correct', 'wrong', 'accuracy', 'netPerMin', 'avgRt', 'threshold'];
+    const cols = ['date', 'config', 'secs', 'deadline', 'attempted', 'correct', 'wrong', 'timeouts', 'accuracy', 'netPerMin', 'avgRt', 'threshold'];
     const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const csv = [cols.join(',')].concat(h.map(r => cols.map(c => esc(r[c])).join(','))).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -405,7 +449,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
   $('clearBtn').addEventListener('click', () => {
     if (confirm('Delete all saved sessions on this device?')) { store(LS_H, []); renderHistory(); updateResumeHint(); }
   });
-  ['opAdd', 'opSub', 'd1', 'd2', 'neg', 'secs', 'startMs', 'resume'].forEach(id => $(id).addEventListener('change', updateResumeHint));
+  ['opAdd', 'opSub', 'd1', 'd2', 'neg', 'secs', 'startMs', 'resume', 'deadline'].forEach(id => $(id).addEventListener('change', updateResumeHint));
 
   $('drill').addEventListener('pointerdown', e => {
     if (e.target.id !== 'answer' && e.target.id !== 'quitBtn') { e.preventDefault(); $('answer').focus(); }
