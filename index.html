@@ -41,9 +41,18 @@ select,input[type=number]{width:100%;background:var(--bg);color:var(--text);bord
 #slow{font:600 13px var(--mono);letter-spacing:.1em;text-align:center;color:var(--bad);min-height:1.2em;margin:-20px 0 8px}
 .dl{width:min(280px,100%);height:4px;margin:12px auto 0;background:var(--line);border-radius:2px;overflow:hidden}
 .dl i{display:block;height:100%;width:100%;background:var(--accent)}
-#answer{display:block;margin:0 auto;width:min(280px,100%);text-align:center;font:600 40px var(--mono);background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:14px;padding:10px;outline:none;transition:border-color .1s}
-#answer:focus{border-color:var(--accent)}
-#answer.flash-good{border-color:var(--good)}
+#memProblem{font:600 clamp(44px,13vw,92px)/1.15 var(--mono);text-align:center;margin:40px 0 12px;min-height:1.2em;white-space:nowrap}
+#memProblem.bad{color:var(--bad)}
+#memProblem.study{color:var(--good)}
+#memTag{font:600 13px var(--mono);letter-spacing:.12em;text-align:center;color:var(--muted);margin:40px 0 0;min-height:1.2em}
+#memHelp{font:16px var(--mono);text-align:center;color:var(--muted);min-height:1.4em;margin:0 0 20px}
+#memFeedback{font:14px var(--mono);text-align:center;min-height:1.3em;margin:14px 0 0;color:var(--muted)}
+#memFeedback.good{color:var(--good)} #memFeedback.bad{color:var(--bad)}
+.dots span{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;background:var(--good)}
+.dots span.x{background:var(--bad)}
+#answer,#memAnswer{display:block;margin:0 auto;width:min(280px,100%);text-align:center;font:600 40px var(--mono);background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:14px;padding:10px;outline:none;transition:border-color .1s}
+#answer:focus,#memAnswer:focus{border-color:var(--accent)}
+#answer.flash-good,#memAnswer.flash-good{border-color:var(--good)}
 .big{font:600 56px var(--mono);margin:4px 0}
 .delta{font:14px var(--mono);margin:6px 0 0;color:var(--muted)}
 .delta.up{color:var(--good)} .delta.down{color:var(--bad)}
@@ -126,12 +135,31 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       <button class="btn" id="startBtn">Start</button>
       <span class="hint" style="margin:0">or press Enter</span>
     </div>
+    <div class="card" id="troubleCard">
+      <div class="histhead">
+        <p class="label">Trouble facts</p>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost small" id="factsCsvBtn">Export facts</button>
+          <button class="btn small" id="memBtn">Memorize</button>
+        </div>
+      </div>
+      <p class="hint" id="troubleNote" style="margin:0 0 10px"></p>
+      <div class="tablewrap">
+        <table id="troubleTable" hidden>
+          <thead><tr><th>Fact</th><th>Last 10</th><th>Misses</th><th>You typed</th><th>Avg</th><th>Review</th></tr></thead>
+          <tbody id="troubleBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="troubleTypes"></p>
+    </div>
     <details class="card how">
       <summary>How it works</summary>
       <p>Display time shrinks 8% after each correct answer and grows 35% after a miss, so it settles where you're right about 78% of the time. That level is your <b>threshold</b> (median display time over your last 10 problems). Lower is better.</p>
       <p>Answers submit automatically once you've typed as many characters as the answer has. A miss shows the correct answer for 0.9 s, which counts against the clock.</p>
       <p><b>Answer deadline:</b> the bar under the answer box drains from the moment the problem appears. If you haven't finished typing when it empties, the problem counts as a miss ("too slow") and display time grows. This stops you from holding the image and reading it back slowly. Each deadline keeps its own history and threshold. Lower the deadline by 0.5 s once your average response is under about 70% of it for 3 sessions in a row.</p>
       <p><b>Regroup facts:</b> only the 45 subtraction facts that need a borrow (10 − 1 … 18 − 9) and/or the 45 addition facts that carry (1 + 9 … 9 + 9). The drill remembers how fast you answer each one and shows your slowest ones more often until they're as fast as the rest. The results screen lists your slowest facts.</p>
+      <p><b>Trouble facts:</b> a fact is listed once you've missed it at least 2 of your last 10 facts-drill attempts (20% or more, with at least 3 attempts). Misses are split into <i>near-key</i> (one digit off by an adjacent key on the number row or numpad: a typo or an off-by-one), <i>far</i> (a genuinely wrong answer) and <i>too slow</i>. A fact drops off the list once enough clean attempts push the misses out of its last 10.</p>
+      <p><b>Memorize:</b> works on up to 8 trouble facts that are due. Each new fact is shown with its answer and a shortcut, and you type it once. Then it comes back with gaps that widen (2, 3, then 6 problems later), mixed in with facts you already know. It's learned after 3 correct answers in a row, each faster than your target speed. A miss shows the answer and you retype it before moving on. Learned facts go up a review box (due again in 1, 2, 4, then 8 days); unfinished ones go back to box 0. A miss in a normal drill sends a fact back to box 0. Memorize answers don't count toward the trouble list, so the list measures you only under drill conditions.</p>
       <p>Esc quits without saving. History is stored in this browser only. Use Export CSV to copy it into your spreadsheet.</p>
     </details>
   </section>
@@ -149,6 +177,39 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     <div class="dl" id="dlWrap"><i id="dlBar"></i></div>
     <p class="hint center">Answers submit automatically · Esc to quit (not saved)</p>
     <div class="center" style="margin-top:12px"><button class="btn ghost small" id="quitBtn">Quit</button></div>
+  </section>
+
+  <!-- MEMORIZE -->
+  <section id="mem" hidden>
+    <div class="hud">
+      <span>Learned <b id="memDone">0/0</b></span>
+      <span>Target <b id="memTarget">—</b></span>
+      <span>Time <b id="memClock">0:00</b></span>
+    </div>
+    <div id="memTag"></div>
+    <div id="memProblem"></div>
+    <div id="memHelp"></div>
+    <input id="memAnswer" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Answer">
+    <div id="memFeedback"></div>
+    <p class="hint center">Type the answer · Esc to stop and save progress</p>
+    <div class="center" style="margin-top:12px"><button class="btn ghost small" id="memQuitBtn">Stop</button></div>
+  </section>
+
+  <section id="memResults" hidden>
+    <div class="card">
+      <p class="label" id="memRTitle">Memorize results</p>
+      <p class="hint" id="memRNote" style="margin:0 0 10px"></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Fact</th><th>Result</th><th>Tries</th><th>Misses</th><th>Next review</th></tr></thead>
+          <tbody id="memRBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="memAgainBtn">Memorize again</button>
+      <button class="btn ghost" id="memHomeBtn">Home</button>
+    </div>
   </section>
 
   <!-- RESULTS -->
@@ -210,8 +271,9 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
   let st = null;
 
   function showScreen(name) {
-    ['setup', 'drill', 'results'].forEach(s => { $(s).hidden = (s !== name); });
-    $('historyCard').hidden = (name === 'drill');
+    ['setup', 'drill', 'results', 'mem', 'memResults'].forEach(s => { $(s).hidden = (s !== name); });
+    $('historyCard').hidden = (name === 'drill' || name === 'mem');
+    if (name === 'setup') renderTrouble();
   }
 
   function fillForm() {
@@ -292,13 +354,122 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return Object.assign({}, pool[i]); }
     return Object.assign({}, pool[pool.length - 1]);
   }
-  function recordFact(p, ok) {
+  function recordFact(p, ok, typed, timedOut) {
     if (!p.key) return;
     const stats = load(LS_F, {});
     const rt = ok ? performance.now() - p.shownAt : (st.dlMs || 3000) * 1.5;
-    const s = stats[p.key];
-    stats[p.key] = s ? { n: s.n + 1, ema: Math.round(0.7 * s.ema + 0.3 * rt) } : { n: 1, ema: Math.round(rt) };
+    const s = stats[p.key] || {};
+    const f = Object.assign({}, s);
+    f.n = (s.n || 0) + 1;
+    f.ema = s.ema == null ? Math.round(rt) : Math.round(0.7 * s.ema + 0.3 * rt);
+    f.w = ((s.w || '') + (ok ? '1' : '0')).slice(-WINDOW);
+    if (!ok) {
+      f.m = (s.m || 0) + 1;
+      if (timedOut) f.to = (s.to || 0) + 1;
+      else if (isNearKey(typed, p.ans)) f.near = (s.near || 0) + 1;
+      else f.far = (s.far || 0) + 1;
+      if (!timedOut && typed) f.tw = (s.tw || []).concat(typed).slice(-5);
+      if (f.box != null) { f.box = 0; f.due = Date.now(); }
+    }
+    stats[p.key] = f;
     store(LS_F, stats);
+  }
+
+  // ---- Miss classification ----
+  // Near-key: same length, exactly one digit differs, and the two digits are neighbours
+  // on the number row or on a numpad (or a two-digit transposition, e.g. 21 for 12).
+  const ROW = '1234567890';
+  const PAD = { 7: [[0, 0]], 8: [[0, 1]], 9: [[0, 2]], 4: [[1, 0]], 5: [[1, 1]], 6: [[1, 2]], 1: [[2, 0]], 2: [[2, 1]], 3: [[2, 2]], 0: [[3, 0], [3, 1]] };
+  function adjacentKeys(a, b) {
+    if (Math.abs(ROW.indexOf(a) - ROW.indexOf(b)) === 1) return true;
+    return (PAD[a] || []).some(([r1, c1]) => (PAD[b] || []).some(([r2, c2]) => Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1));
+  }
+  function isNearKey(typed, ans) {
+    if (!typed || typed.length !== ans.length) return false;
+    if (ans.length === 2 && typed === ans[1] + ans[0] && ans[0] !== ans[1]) return true;
+    const diff = [];
+    for (let i = 0; i < ans.length; i++) if (typed[i] !== ans[i]) diff.push(i);
+    return diff.length === 1 && adjacentKeys(typed[diff[0]], ans[diff[0]]);
+  }
+
+  // ---- Trouble facts ----
+  const WINDOW = 10;
+  function missCount(w) { let c = 0; for (const ch of w || '') if (ch === '0') c++; return c; }
+  function isTrouble(s) {
+    if (!s || !s.w || s.w.length < 3) return false;
+    const m = missCount(s.w);
+    return m >= 2 && m / s.w.length >= 0.2;
+  }
+  function factsByKey() {
+    const map = {};
+    allFacts({ add: true, sub: true }).forEach(f => { map[f.key] = f; });
+    return map;
+  }
+  function troubleFacts(stats) {
+    return allFacts({ add: true, sub: true })
+      .filter(f => isTrouble(stats[f.key]))
+      .sort((x, y) => {
+        const a = stats[x.key], b = stats[y.key];
+        const ra = missCount(a.w) / a.w.length, rb = missCount(b.w) / b.w.length;
+        return (rb - ra) || (b.ema - a.ema);
+      });
+  }
+  function fmtDue(s) {
+    if (!s || s.box == null) return 'new';
+    if (!s.due || s.due <= Date.now()) return 'box ' + s.box + ' · due now';
+    return 'box ' + s.box + ' · ' + new Date(s.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  function renderTrouble() {
+    const stats = load(LS_F, {}), list = troubleFacts(stats), body = $('troubleBody');
+    body.innerHTML = '';
+    const tracked = Object.values(stats).some(s => s.w);
+    if (!list.length) {
+      $('troubleTable').hidden = true;
+      $('troubleNote').textContent = tracked
+        ? 'No consistent misses right now. Memorize will work on your slowest facts instead.'
+        : 'Misses are tracked from now on in Regroup facts mode. Run a few facts drills and your consistently wrong facts will show up here.';
+      $('troubleTypes').textContent = '';
+      return;
+    }
+    $('troubleTable').hidden = false;
+    const dueN = list.filter(f => { const s = stats[f.key]; return s.box == null || !s.due || s.due <= Date.now(); }).length;
+    $('troubleNote').textContent = list.length + ' fact' + (list.length === 1 ? '' : 's') + ' missed at least 2 of the last 10 attempts · ' + dueN + ' due for memorizing.';
+    let near = 0, far = 0, to = 0;
+    list.forEach(f => {
+      const s = stats[f.key];
+      near += s.near || 0; far += s.far || 0; to += s.to || 0;
+      const tr = document.createElement('tr');
+      const td = t => { const c = document.createElement('td'); c.textContent = t; tr.appendChild(c); return c; };
+      td(f.text + ' = ' + f.ans);
+      const dots = td(''); dots.className = 'dots';
+      for (const ch of s.w) { const d = document.createElement('span'); if (ch === '0') d.className = 'x'; dots.appendChild(d); }
+      td(missCount(s.w) + '/' + s.w.length);
+      td(s.tw && s.tw.length ? Array.from(new Set(s.tw)).join(', ') : '—');
+      td((s.ema / 1000).toFixed(2) + 's');
+      td(fmtDue(s));
+      body.appendChild(tr);
+    });
+    $('troubleTypes').textContent = 'Miss types on these facts (all time): ' + near + ' near-key, ' + far + ' far, ' + to + ' too slow. Near-key = one digit off by an adjacent key, so either a typo or an off-by-one.';
+  }
+  function exportFactsCsv() {
+    const stats = load(LS_F, {}), facts = allFacts({ add: true, sub: true }).filter(f => stats[f.key]);
+    if (!facts.length) return;
+    const cols = ['fact', 'answer', 'attempts', 'emaMs', 'last10', 'missesLast10', 'missesTotal', 'nearKey', 'far', 'tooSlow', 'typedRecent', 'trouble', 'box', 'due'];
+    const rows = facts.map(f => {
+      const s = stats[f.key];
+      return [f.text.replace('−', '-'), f.ans, s.n, s.ema, s.w || '', missCount(s.w), s.m || 0, s.near || 0, s.far || 0, s.to || 0,
+              (s.tw || []).join(' '), isTrouble(s) ? 1 : 0, s.box == null ? '' : s.box, s.due ? new Date(s.due).toISOString() : ''];
+    });
+    downloadCsv([cols].concat(rows), 'flash-drill-facts.csv');
+  }
+  function downloadCsv(rows, name) {
+    const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function makeProblem() {
     if (settings.mode === 'facts') return pickFact();
@@ -384,7 +555,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     hud();
   }
 
-  function grade(ok, timedOut) {
+  function grade(ok, timedOut, typed) {
     st.locked = true;
     clearTimeout(st.hideT);
     clearTimeout(st.dlT);
@@ -393,7 +564,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     bar.style.width = getComputedStyle(bar).width;
     const p = st.cur;
     st.msLog.push(p.ms);
-    if (settings.mode === 'facts') recordFact(p, ok);
+    if (settings.mode === 'facts') recordFact(p, ok, typed, timedOut);
     if (ok) {
       st.correct++;
       st.rt.push(performance.now() - p.shownAt);
@@ -420,7 +591,7 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     if (st.locked) { inp.value = ''; return; }
     const v = inp.value.replace(/[^0-9-]/g, '');
     if (v !== inp.value) inp.value = v;
-    if (v.length >= st.cur.ans.length) grade(v === st.cur.ans);
+    if (v.length >= st.cur.ans.length) grade(v === st.cur.ans, false, v);
   });
 
   function finish(save) {
@@ -512,14 +683,204 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
     const h = history();
     if (!h.length) return;
     const cols = ['date', 'config', 'secs', 'deadline', 'attempted', 'correct', 'wrong', 'timeouts', 'accuracy', 'netPerMin', 'avgRt', 'threshold'];
-    const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const csv = [cols.join(',')].concat(h.map(r => cols.map(c => esc(r[c])).join(','))).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = 'flash-drill-history.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadCsv([cols].concat(h.map(r => cols.map(c => r[c]))), 'flash-drill-history.csv');
   }
+
+  // ---- Memorize mode ----
+  // Study (see answer + shortcut, type it) → retrieval at widening gaps, interleaved with known facts
+  // → learned after MEM_NEED fast correct answers in a row. Misses show the answer and must be retyped.
+  const MEM_MAX = 8, MEM_ACTIVE = 3, MEM_NEED = 3, MEM_GAPS = [3, 6], MEM_CAP_MS = 6 * 60 * 1000;
+  const BOX_DAYS = [0, 1, 2, 4, 8], DAY = 86400000;
+  let mm = null;
+
+  function shortcut(f) {
+    const [a, b] = f.key.split(/[+-]/).map(Number);
+    if (f.key.includes('-')) {
+      const u = a - 10;
+      return u === 0
+        ? '10 − ' + b + ' → ' + b + ' + ' + (10 - b) + ' = 10, so ' + (10 - b)
+        : a + ' − ' + b + ' → (10 − ' + b + ') + ' + u + ' = ' + (10 - b) + ' + ' + u + ' = ' + f.ans;
+    }
+    const big = Math.max(a, b), small = Math.min(a, b), fill = 10 - big, rest = small - fill;
+    return rest === 0
+      ? big + ' + ' + small + ' = 10'
+      : big + ' + ' + small + ' → ' + big + ' + ' + fill + ' = 10, then + ' + rest + ' = ' + f.ans;
+  }
+  function memTargetMs(stats) {
+    const e = Object.values(stats).filter(s => s.n >= 3 && s.ema).map(s => s.ema);
+    const med = median(e);
+    if (med == null) return 1500;
+    return Math.min(2000, Math.max(800, Math.round(med * 1.15 / 50) * 50));
+  }
+  function memDeck(stats) {
+    const now = Date.now(), trouble = troubleFacts(stats);
+    const due = trouble.filter(f => { const s = stats[f.key]; return s.box == null || !s.due || s.due <= now; });
+    if (due.length) return { facts: due.slice(0, MEM_MAX), note: 'Working on ' + Math.min(due.length, MEM_MAX) + ' due trouble fact' + (due.length === 1 ? '' : 's') + '.' };
+    if (trouble.length) return { facts: trouble.slice(0, MEM_MAX), note: 'No trouble facts are due yet, so this is an early review.' };
+    const seen = allFacts({ add: true, sub: true }).filter(f => stats[f.key] && stats[f.key].n >= 3)
+      .sort((x, y) => stats[y.key].ema - stats[x.key].ema);
+    if (seen.length) return { facts: seen.slice(0, 6), note: 'No consistent misses, so this works on your 6 slowest facts.' };
+    return { facts: [], note: '' };
+  }
+
+  function startMem() {
+    const stats = load(LS_F, {}), deck = memDeck(stats);
+    if (!deck.facts.length) { $('err').textContent = 'Run a Regroup facts drill first so there is data to memorize from.'; showScreen('setup'); return; }
+    $('err').textContent = '';
+    const targetKeys = new Set(deck.facts.map(f => f.key));
+    const trouble = new Set(troubleFacts(stats).map(f => f.key));
+    let fillers = allFacts({ add: true, sub: true })
+      .filter(f => !targetKeys.has(f.key) && !trouble.has(f.key))
+      .sort((x, y) => ((stats[x.key] || {}).ema || 9e9) - ((stats[y.key] || {}).ema || 9e9));
+    // Prefer fillers from the same operation(s) as the targets
+    const ops = new Set(deck.facts.map(f => f.key.includes('-') ? '-' : '+'));
+    const sameOp = fillers.filter(f => ops.has(f.key.includes('-') ? '-' : '+'));
+    fillers = (sameOp.length >= 6 ? sameOp : fillers).slice(0, 20);
+    mm = {
+      targets: deck.facts.map(f => ({ f, studied: false, streak: 0, nextAt: 0, tries: 0, misses: 0, done: false })),
+      fillers, step: 0, cur: null, phase: null, shownAt: 0, startAt: performance.now(),
+      target: memTargetMs(stats), note: deck.note, tick: null, lastKey: null, done: false
+    };
+    $('memTarget').textContent = '≤' + (mm.target / 1000).toFixed(2) + 's';
+    $('memFeedback').textContent = ''; $('memFeedback').className = '';
+    showScreen('mem');
+    $('memAnswer').value = ''; $('memAnswer').focus();
+    mm.tick = setInterval(memTick, 250);
+    memTick();
+    memNext();
+  }
+  function memTick() {
+    if (!mm || mm.done) return;
+    const el = performance.now() - mm.startAt, s = Math.floor(el / 1000);
+    $('memClock').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    $('memDone').textContent = mm.targets.filter(t => t.done).length + '/' + mm.targets.length;
+    if (el >= MEM_CAP_MS) finishMem();
+  }
+  function memNext() {
+    if (!mm || mm.done) return;
+    if (mm.targets.every(t => t.done) || performance.now() - mm.startAt >= MEM_CAP_MS) { finishMem(); return; }
+    mm.step++;
+    const active = mm.targets.filter(t => t.studied && !t.done);
+    let pick = null;
+    const dueT = active.filter(t => t.nextAt <= mm.step && t.f.key !== mm.lastKey).sort((a, b) => a.nextAt - b.nextAt);
+    if (dueT.length) pick = dueT[0];
+    else if (active.length < MEM_ACTIVE) pick = mm.targets.find(t => !t.studied) || null;
+    let card;
+    if (pick) card = { t: pick, f: pick.f, phase: pick.studied ? 'test' : 'study' };
+    else {
+      const pool = mm.fillers.filter(f => f.key !== mm.lastKey);
+      if (pool.length) { const f = pool[Math.floor(Math.random() * pool.length)]; card = { t: null, f, phase: 'test' }; }
+      else {
+        const soon = active.filter(t => t.f.key !== mm.lastKey).sort((a, b) => a.nextAt - b.nextAt)[0] || active[0];
+        card = { t: soon, f: soon.f, phase: 'test' };
+      }
+    }
+    mm.cur = card; mm.lastKey = card.f.key;
+    showMemCard(card.phase);
+  }
+  function showMemCard(phase) {
+    const c = mm.cur, el = $('memProblem');
+    mm.cur.phase = phase;
+    $('memAnswer').value = '';
+    if (phase === 'study') {
+      $('memTag').textContent = 'NEW FACT · TYPE THE ANSWER';
+      el.className = 'study'; el.textContent = c.f.text + ' = ' + c.f.ans;
+      $('memHelp').textContent = shortcut(c.f);
+    } else if (phase === 'correct') {
+      $('memTag').textContent = 'RETYPE THE CORRECT ANSWER';
+      el.className = 'bad'; el.textContent = c.f.text + ' = ' + c.f.ans;
+      $('memHelp').textContent = shortcut(c.f);
+    } else {
+      $('memTag').textContent = c.t ? 'RECALL' : 'RECALL · REVIEW';
+      el.className = ''; el.textContent = c.f.text;
+      $('memHelp').textContent = '';
+    }
+    mm.shownAt = performance.now();
+  }
+  function memFeedback(text, cls) { const fb = $('memFeedback'); fb.textContent = text; fb.className = cls || ''; }
+  function memAnswer(v) {
+    const c = mm.cur, t = c.t, rt = performance.now() - mm.shownAt, ok = v === c.f.ans;
+    if (c.phase === 'study') {
+      if (!ok) { $('memAnswer').value = ''; return; }
+      t.studied = true; t.nextAt = mm.step + 2;
+      memFeedback('Got it. It comes back in a moment.', '');
+      memNext(); return;
+    }
+    if (c.phase === 'correct') {
+      if (!ok) { $('memAnswer').value = ''; return; }
+      memFeedback('');
+      memNext(); return;
+    }
+    // test
+    if (t) t.tries++;
+    if (!ok) {
+      if (t) { t.misses++; t.streak = 0; t.nextAt = mm.step + 2; }
+      memFeedback('✗ You typed ' + v + (isNearKey(v, c.f.ans) ? ' (adjacent key)' : ''), 'bad');
+      showMemCard('correct');
+      return;
+    }
+    const inp = $('memAnswer');
+    inp.classList.add('flash-good'); setTimeout(() => inp.classList.remove('flash-good'), 120);
+    const secs = (rt / 1000).toFixed(2) + 's';
+    if (!t) { memFeedback('✓ ' + secs, 'good'); memNext(); return; }
+    if (rt <= mm.target) {
+      t.streak++;
+      if (t.streak >= MEM_NEED) { t.done = true; memFeedback('✓ ' + secs + ' · ' + c.f.text + ' learned', 'good'); }
+      else { t.nextAt = mm.step + MEM_GAPS[t.streak - 1]; memFeedback('✓ ' + secs + ' · ' + t.streak + '/' + MEM_NEED, 'good'); }
+    } else {
+      t.nextAt = mm.step + 2;
+      memFeedback('✓ ' + secs + ' · correct but slower than ' + (mm.target / 1000).toFixed(2) + 's, so it doesn\'t count yet', '');
+    }
+    memNext();
+  }
+  function finishMem() {
+    if (!mm || mm.done) return;
+    mm.done = true;
+    clearInterval(mm.tick);
+    const stats = load(LS_F, {}), now = Date.now(), body = $('memRBody');
+    body.innerHTML = '';
+    mm.targets.forEach(t => {
+      const s = Object.assign({ n: 0 }, stats[t.f.key]);
+      let result;
+      if (t.done) {
+        s.box = Math.min((s.box || 0) + 1, BOX_DAYS.length - 1);
+        s.due = now + BOX_DAYS[s.box] * DAY;
+        result = 'Learned';
+      } else if (t.studied) {
+        s.box = 0; s.due = now;
+        result = 'Not yet (' + t.streak + '/' + MEM_NEED + ')';
+      } else result = 'Not reached';
+      if (t.studied) stats[t.f.key] = s;
+      const tr = document.createElement('tr');
+      [t.f.text + ' = ' + t.f.ans, result, t.tries, t.misses, t.studied ? fmtDue(s) : '—'].forEach(x => {
+        const td = document.createElement('td'); td.textContent = x; tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    store(LS_F, stats);
+    const learned = mm.targets.filter(t => t.done).length;
+    $('memRTitle').textContent = 'Memorize · ' + learned + '/' + mm.targets.length + ' learned';
+    $('memRNote').textContent = mm.note + ' Learned facts move up a review box. Prove them in a normal facts drill to clear them off the trouble list.';
+    mm = null;
+    showScreen('memResults');
+    renderHistory();
+  }
+
+  $('memAnswer').addEventListener('input', () => {
+    const inp = $('memAnswer');
+    if (!mm || mm.done || !mm.cur) return;
+    const v = inp.value.replace(/[^0-9-]/g, '');
+    if (v !== inp.value) inp.value = v;
+    if (v.length >= mm.cur.f.ans.length) memAnswer(v);
+  });
+  $('mem').addEventListener('pointerdown', e => {
+    if (e.target.id !== 'memAnswer' && e.target.id !== 'memQuitBtn') { e.preventDefault(); $('memAnswer').focus(); }
+  });
+  $('memBtn').addEventListener('click', startMem);
+  $('memAgainBtn').addEventListener('click', startMem);
+  $('memQuitBtn').addEventListener('click', finishMem);
+  $('memHomeBtn').addEventListener('click', () => { fillForm(); updateResumeHint(); showScreen('setup'); });
+  $('factsCsvBtn').addEventListener('click', exportFactsCsv);
 
   // Wiring
   $('startBtn').addEventListener('click', start);
@@ -542,7 +903,16 @@ th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
       if (e.key === 'Escape') { e.preventDefault(); finish(false); }
       return;
     }
-    if (e.key === 'Enter' && $('drill').hidden) {
+    if (mm && !mm.done) {
+      if (e.key === 'Escape') { e.preventDefault(); finishMem(); }
+      return;
+    }
+    if (e.key === 'Enter' && !$('memResults').hidden) {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === 'BUTTON') return;
+      e.preventDefault(); startMem(); return;
+    }
+    if (e.key === 'Enter' && (!$('setup').hidden || !$('results').hidden)) {
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'BUTTON' || tag === 'SUMMARY') return;
       e.preventDefault();
